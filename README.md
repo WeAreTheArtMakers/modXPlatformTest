@@ -1,6 +1,4 @@
-
-
-#🚀 Welcome to the MODX Platform – an advanced token and staking ecosystem built on Ethereum-compatible chains.
+🚀 Welcome to the MODX Platform – an advanced token and staking ecosystem built on Ethereum-compatible chains.
 
 🪙 MODX Token is a flexible ERC-20 token with burnable, pausable, and fully customizable vesting capabilities for contributors and early supporters.
 
