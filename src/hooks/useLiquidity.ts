@@ -24,8 +24,8 @@ const PANCAKE_ROUTER_ABI = [
   "function addLiquidityETH(address token, uint amountTokenDesired, uint amountTokenMin, uint amountETHMin, address to, uint deadline) external payable returns (uint amountToken, uint amountETH, uint liquidity)"
 ];
 
-// BSC Testnet addresses
-const PANCAKE_FACTORY_ADDRESS = '0x6725F303b657a9451d8BA641348b6761A6CC7a17';
+// BSC Testnet addresses - PancakeSwap V2
+const PANCAKE_FACTORY_ADDRESS = '0xB7926C0430Afb07AA7DEfDE6DA862aE0Bde767bc'; // PancakeSwap V2 Factory BSC Testnet
 const PANCAKE_ROUTER_ADDRESS = '0x9ac64cc6e4415144c455bd8e4837fea55603e5c3';
 const WBNB_ADDRESS = '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd';
 const MODX_TOKEN_ADDRESS = '0xB6322eD8561604Ca2A1b9c17e4d02B957EB242fe';
@@ -91,10 +91,14 @@ export const useLiquidity = () => {
     }
 
     try {
+      logger.log('[fetchPosition] Checking pair for modX/WBNB...');
       const factory = new Contract(PANCAKE_FACTORY_ADDRESS, PANCAKE_FACTORY_ABI, provider);
       const pairAddress = await factory.getPair(MODX_TOKEN_ADDRESS, WBNB_ADDRESS);
+      
+      logger.log('[fetchPosition] Pair address:', pairAddress);
 
       if (pairAddress === ethers.ZeroAddress) {
+        logger.log('[fetchPosition] No pair exists yet');
         setPosition(null);
         return;
       }
@@ -108,7 +112,11 @@ export const useLiquidity = () => {
         pair.token0()
       ]);
 
+      logger.log('[fetchPosition] LP Balance:', lpBalance.toString());
+      logger.log('[fetchPosition] Total Supply:', totalSupply.toString());
+
       if (lpBalance === 0n) {
+        logger.log('[fetchPosition] User has no LP tokens');
         setPosition(null);
         return;
       }
@@ -121,7 +129,7 @@ export const useLiquidity = () => {
       const token0Amount = (Number(lpBalance) * Number(reserve0)) / Number(totalSupply);
       const token1Amount = (Number(lpBalance) * Number(reserve1)) / Number(totalSupply);
 
-      setPosition({
+      const pos = {
         pairAddress,
         token0: isToken0ModX ? 'modX' : 'BNB',
         token1: isToken0ModX ? 'BNB' : 'modX',
@@ -133,9 +141,12 @@ export const useLiquidity = () => {
         share: share.toFixed(6),
         token0Amount: ethers.formatEther(BigInt(Math.floor(token0Amount))),
         token1Amount: ethers.formatEther(BigInt(Math.floor(token1Amount)))
-      });
+      };
+      
+      logger.log('[fetchPosition] Position found:', pos);
+      setPosition(pos);
     } catch (error) {
-      logger.error('Error fetching liquidity position:', error);
+      logger.error('[fetchPosition] Error:', error);
       setPosition(null);
     }
   }, [account, provider]);

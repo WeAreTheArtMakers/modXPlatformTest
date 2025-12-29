@@ -4,7 +4,7 @@ import contractAbi from '../../conracts/modXLicensedNFT.json';
 import { useWeb3 } from '../context/Web3Context';
 import { logger } from '@/lib/logger';
 
-const NFT_ADDRESS = import.meta.env.VITE_MODX_NFT_ADDRESS;
+const NFT_ADDRESS = import.meta.env.VITE_MODX_NFT_ADDRESS || '0xc8aae44711f2a2570d921be56cff3cb997245ef4';
 
 export interface NFTMetadata {
   tokenId: number;
