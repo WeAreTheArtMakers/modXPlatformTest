@@ -35,10 +35,6 @@ const Stake = () => {
     sum + parseFloat(stake.pendingRewards), 0
   );
 
-  // Konsola stakes ve pools yazdır
-  console.log("Active stakes:", activeStakes);
-  console.log("All pools:", pools);
-
   return (
     <div className="min-h-screen bg-background">
       <Header />

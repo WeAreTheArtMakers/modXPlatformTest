@@ -8,7 +8,9 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useSwap } from '@/hooks/useSwap';
 import { useRealTimePrice } from '@/hooks/useRealTimePrice';
 import SwapInterface from '@/components/SwapInterface';
+import AddLiquidityInterface from '@/components/AddLiquidityInterface';
 import { History, TrendingUp, BarChart3, ArrowUpDown } from 'lucide-react';
+
 
 const Swap = () => {
   const { t } = useLanguage();
@@ -70,6 +72,9 @@ const Swap = () => {
             {/* Swap Interface */}
             <div className="lg:col-span-2">
               <SwapInterface />
+              <div className="mt-8">
+                <AddLiquidityInterface />
+              </div>
 
               {/* Swap History */}
               <Card className="cyber-card mt-8">
@@ -87,7 +92,7 @@ const Swap = () => {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {swapHistory.map((swap: any) => (
+                      {swapHistory.map((swap: { id: string; fromAmount: string; from: string; to: string; toAmount: string; date: string; hash: string }) => (
                         <div key={swap.id} className="flex items-center justify-between p-3 bg-background/30 rounded-lg hover:bg-background/50 transition-colors duration-300">
                           <div className="flex items-center space-x-3">
                             <div className="text-sm font-roboto">
@@ -123,6 +128,7 @@ const Swap = () => {
                       value={selectedToken}
                       onChange={(e) => setSelectedToken(e.target.value)}
                       className="bg-background/30 border border-green-500/30 rounded-lg px-3 py-2 font-roboto w-full"
+                      aria-label="Select token for price chart"
                     >
                       {availableTokens.map(token => (
                         <option key={token} value={token}>{token.toUpperCase()}</option>

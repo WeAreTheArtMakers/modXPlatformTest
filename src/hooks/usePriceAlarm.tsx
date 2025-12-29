@@ -1,6 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { logger } from '@/lib/logger';
 
 interface PriceAlarm {
   token: string;
@@ -26,30 +26,25 @@ export const usePriceAlarm = (currentPrices: { [key: string]: { price: number } 
     const currentPrice = currentPrices[alarm.token].price;
     const targetPrice = alarm.targetPrice;
 
-    // Check if target price is reached
     if (
       (alarm.currentPrice < targetPrice && currentPrice >= targetPrice) ||
       (alarm.currentPrice > targetPrice && currentPrice <= targetPrice)
     ) {
-      // Trigger notification
       toast({
         title: "🎯 Fiyat Alarmı!",
-        description: `${alarm.token.toUpperCase()} hedef fiyata ulaştı: $${targetPrice.toFixed(6)}`,
+        description: `${alarm.token.toUpperCase()} hedef fiyata ulaştı: ${targetPrice.toFixed(6)}`,
         duration: 10000,
       });
 
-      // Play sound notification
       try {
         const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+T0wWUjB');
         audio.play().catch(() => {
-          // Fallback if audio fails
-          console.log('Audio notification failed, using visual only');
+          logger.log('Audio notification failed, using visual only');
         });
-      } catch (error) {
-        console.log('Audio notification not supported');
+      } catch {
+        logger.log('Audio notification not supported');
       }
 
-      // Clear the alarm
       localStorage.removeItem('priceAlarm');
       setAlarm(null);
     }

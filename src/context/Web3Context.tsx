@@ -1,6 +1,12 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ethers } from 'ethers';
+import { logger } from '@/lib/logger';
+
+interface EthereumProvider {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  on: (event: string, callback: (...args: unknown[]) => void) => void;
+  removeListener: (event: string, callback: (...args: unknown[]) => void) => void;
+}
 
 interface Web3ContextType {
   account: string | null;
@@ -22,37 +28,42 @@ export const Web3Provider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [chainId, setChainId] = useState<number | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
-  // BSC Testnet Chain ID
   const BSC_TESTNET_CHAIN_ID = 97;
 
+  const getEthereum = (): EthereumProvider | undefined => {
+    if (typeof window !== 'undefined') {
+      return window.ethereum as EthereumProvider | undefined;
+    }
+    return undefined;
+  };
+
   const connectWallet = async () => {
-    if (typeof window.ethereum === 'undefined') {
+    const ethereum = getEthereum();
+    if (!ethereum) {
       alert('MetaMask is not installed!');
       return;
     }
 
     setIsConnecting(true);
     try {
-      // Request account access
-      const accounts = await window.ethereum.request({
+      const accounts = await ethereum.request({
         method: 'eth_requestAccounts',
-      });
+      }) as string[];
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const network = await provider.getNetwork();
+      const browserProvider = new ethers.BrowserProvider(ethereum as ethers.Eip1193Provider);
+      const walletSigner = await browserProvider.getSigner();
+      const network = await browserProvider.getNetwork();
 
       setAccount(accounts[0]);
-      setProvider(provider);
-      setSigner(signer);
+      setProvider(browserProvider);
+      setSigner(walletSigner);
       setChainId(Number(network.chainId));
 
-      // Auto switch to BSC Testnet if not already connected
       if (Number(network.chainId) !== BSC_TESTNET_CHAIN_ID) {
         await switchToTestnet();
       }
     } catch (error) {
-      console.error('Error connecting wallet:', error);
+      logger.error('Error connecting wallet:', error);
     } finally {
       setIsConnecting(false);
     }
@@ -66,19 +77,19 @@ export const Web3Provider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const switchToTestnet = async () => {
-    if (!window.ethereum) return;
+    const ethereum = getEthereum();
+    if (!ethereum) return;
 
     try {
-      // Try to switch to BSC Testnet
-      await window.ethereum.request({
+      await ethereum.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: `0x${BSC_TESTNET_CHAIN_ID.toString(16)}` }],
       });
-    } catch (switchError: any) {
-      // If the chain is not added, add it
-      if (switchError.code === 4902) {
+    } catch (switchError: unknown) {
+      const error = switchError as { code?: number };
+      if (error.code === 4902) {
         try {
-          await window.ethereum.request({
+          await ethereum.request({
             method: 'wallet_addEthereumChain',
             params: [
               {
@@ -95,58 +106,59 @@ export const Web3Provider: React.FC<{ children: ReactNode }> = ({ children }) =>
             ],
           });
         } catch (addError) {
-          console.error('Error adding BSC Testnet:', addError);
+          logger.error('Error adding BSC Testnet:', addError);
         }
       }
     }
   };
 
-  // Listen for account changes
   useEffect(() => {
-    if (window.ethereum) {
-      const handleAccountsChanged = (accounts: string[]) => {
-        if (accounts.length === 0) {
+    const ethereum = getEthereum();
+    if (ethereum) {
+      const handleAccountsChanged = (accounts: unknown) => {
+        const accountList = accounts as string[];
+        if (accountList.length === 0) {
           disconnectWallet();
         } else {
-          setAccount(accounts[0]);
+          setAccount(accountList[0]);
         }
       };
 
-      const handleChainChanged = (chainId: string) => {
-        setChainId(parseInt(chainId, 16));
+      const handleChainChanged = (chainIdHex: unknown) => {
+        setChainId(parseInt(chainIdHex as string, 16));
       };
 
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', handleChainChanged);
+      ethereum.on('accountsChanged', handleAccountsChanged);
+      ethereum.on('chainChanged', handleChainChanged);
 
       return () => {
-        window.ethereum?.removeListener('accountsChanged', handleAccountsChanged);
-        window.ethereum?.removeListener('chainChanged', handleChainChanged);
+        ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        ethereum.removeListener('chainChanged', handleChainChanged);
       };
     }
   }, []);
 
-  // Check if already connected on page load
   useEffect(() => {
     const checkConnection = async () => {
-      if (window.ethereum) {
+      const ethereum = getEthereum();
+      if (ethereum) {
         try {
-          const accounts = await window.ethereum.request({
+          const accounts = await ethereum.request({
             method: 'eth_accounts',
-          });
+          }) as string[];
           
           if (accounts.length > 0) {
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const signer = await provider.getSigner();
-            const network = await provider.getNetwork();
+            const browserProvider = new ethers.BrowserProvider(ethereum as ethers.Eip1193Provider);
+            const walletSigner = await browserProvider.getSigner();
+            const network = await browserProvider.getNetwork();
 
             setAccount(accounts[0]);
-            setProvider(provider);
-            setSigner(signer);
+            setProvider(browserProvider);
+            setSigner(walletSigner);
             setChainId(Number(network.chainId));
           }
         } catch (error) {
-          console.error('Error checking connection:', error);
+          logger.error('Error checking connection:', error);
         }
       }
     };
@@ -180,9 +192,8 @@ export const useWeb3 = () => {
   return context;
 };
 
-// Extend Window interface for ethereum
 declare global {
   interface Window {
-    ethereum?: any;
+    ethereum?: EthereumProvider;
   }
 }

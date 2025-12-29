@@ -1,14 +1,13 @@
-
 import { useState, useEffect, useMemo } from 'react';
 import { ethers, Contract } from 'ethers';
 import { useWeb3 } from '@/context/Web3Context';
 import { useModXToken } from './useModXToken';
 import { toast } from 'sonner';
 import { CONTRACT_ADDRESSES } from '@/config/constants';
+import { logger } from '@/lib/logger';
 
-// MODX Staking contract ABI (güncellenmiş)
+// MODX Staking contract ABI
 const STAKING_ABI = [
-  // Pools & View
   "function stakingPools(uint256) view returns (uint256 duration,uint256 apy,uint256 totalStaked,uint256 maxStakePerUser,bool isActive)",
   "function poolCount() view returns (uint256)",
   "function userStakes(address,uint256) view returns (uint256 amount,uint256 rewardDebt,uint256 stakeTime,uint256 lockEndTime,uint256 poolId)",
@@ -16,11 +15,9 @@ const STAKING_ABI = [
   "function userActivePoolIds(address) view returns (uint256[])",
   "function getPendingRewards(address,uint256) view returns (uint256)",
   "function getUserStakeInfo(address,uint256) view returns (uint256,uint256,uint256,uint256,bool)",
-  // Mutating
   "function stake(uint256,uint256) external",
   "function unstake(uint256) external",
   "function claimRewards(uint256) external",
-  // Events
   "event Staked(address indexed user,uint256 indexed poolId,uint256 amount)",
   "event Unstaked(address indexed user,uint256 indexed poolId,uint256 amount)",
   "event RewardsClaimed(address indexed user,uint256 amount)",
@@ -32,7 +29,7 @@ const STAKING_CONTRACT_ADDRESS = CONTRACT_ADDRESSES.MODX_STAKING;
 
 export interface StakingPool {
   poolId: number;
-  duration: number; // seconds
+  duration: number;
   apy: number;
   totalStaked: string;
   maxStakePerUser: string;
@@ -68,8 +65,6 @@ export const useStaking = () => {
   const [stakes, setStakes] = useState<StakeInfo[]>([]);
   const [transactionHistory, setTransactionHistory] = useState<TransactionHistory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-
-  // Auto-refresh interval for real-time rewards
   const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
 
   const contract = useMemo(() => {
@@ -77,32 +72,29 @@ export const useStaking = () => {
     try {
       return new Contract(STAKING_CONTRACT_ADDRESS, STAKING_ABI, provider);
     } catch (e) {
-      console.error('Contract creation error:', e);
+      logger.error('Contract creation error:', e);
       return null;
     }
   }, [provider]);
 
-  // Fixed calculation for estimated rewards - works for ALL pools including 30-day
   const calculateEstimatedRewards = (amount: string, poolId: number | null): string => {
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0 || poolId === null) {
-      console.log('[calculateEstimatedRewards] Invalid inputs:', { amount, poolId });
+      logger.log('[calculateEstimatedRewards] Invalid inputs:', { amount, poolId });
       return '0';
     }
     
     const pool = pools.find(p => p.poolId === poolId);
     if (!pool) {
-      console.log('[calculateEstimatedRewards] Pool not found:', poolId);
+      logger.log('[calculateEstimatedRewards] Pool not found:', poolId);
       return '0';
     }
     
     const principal = Number(amount);
-    const annualRate = pool.apy / 100; // Convert basis points to percentage (1200 -> 12%)
-    const durationInYears = pool.duration / (365 * 24 * 3600); // Convert seconds to years
-    
-    // Simple interest calculation: P * R * T
+    const annualRate = pool.apy / 100;
+    const durationInYears = pool.duration / (365 * 24 * 3600);
     const estimatedRewards = principal * annualRate * durationInYears;
     
-    console.log('[calculateEstimatedRewards] Calculation:', {
+    logger.log('[calculateEstimatedRewards] Calculation:', {
       principal,
       annualRate,
       durationInYears,
@@ -113,7 +105,6 @@ export const useStaking = () => {
     return Math.max(0, estimatedRewards).toFixed(6);
   };
 
-  // Calculate real-time pending rewards
   const calculatePendingRewards = (stake: StakeInfo): string => {
     if (!stake.amount || Number(stake.amount) === 0) return '0';
     
@@ -128,82 +119,94 @@ export const useStaking = () => {
     return Math.max(0, pendingRewards).toFixed(4);
   };
 
-  // Fetch transaction history from blockchain events
   const fetchTransactionHistory = async () => {
-    if (!account || !contract) {
+    if (!account || !contract || !provider) {
       setTransactionHistory([]);
       return;
     }
     
     try {
-      console.log('[fetchTransactionHistory] Fetching events for account:', account);
+      logger.log('[fetchTransactionHistory] Fetching events for account:', account);
       
-      const currentBlock = await provider!.getBlockNumber();
-      const deploymentBlock = 0xab3544A6f2aF70064c5B5D3f0E74323DB9a81945; // TODO: replace with actual staking contract deployment block
-      const chunkSize = 5000; // chunk size in blocks to avoid RPC limit exceeded
+      const currentBlock = await provider.getBlockNumber();
+      const deploymentBlock = Math.max(0, currentBlock - 50000);
+      const chunkSize = 5000;
       const allEvents: TransactionHistory[] = [];
+      
       for (let start = deploymentBlock; start <= currentBlock; start += chunkSize) {
         const end = Math.min(start + chunkSize - 1, currentBlock);
-        console.log(`[fetchTransactionHistory] Fetching events from blocks ${start} to ${end}`);
+        logger.log(`[fetchTransactionHistory] Fetching events from blocks ${start} to ${end}`);
+        
         const [stakedEvents, unstakedEvents, claimedEvents] = await Promise.all([
           contract.queryFilter(contract.filters.Staked(account), start, end),
           contract.queryFilter(contract.filters.Unstaked(account), start, end),
           contract.queryFilter(contract.filters.RewardsClaimed(account), start, end)
         ]);
-        stakedEvents.forEach((event: any) => {
-          allEvents.push({
-            id: `stake-${event.transactionHash}-${event.logIndex}`,
-            type: 'Stake',
-            amount: ethers.formatUnits(event.args.amount, 18),
-            poolId: Number(event.args.poolId),
-            timestamp: 0,
-            txHash: event.transactionHash,
-            blockNumber: event.blockNumber
-          });
+        
+        stakedEvents.forEach((event) => {
+          const args = (event as ethers.EventLog).args;
+          if (args) {
+            allEvents.push({
+              id: `stake-${event.transactionHash}-${event.index}`,
+              type: 'Stake',
+              amount: ethers.formatUnits(args.amount, 18),
+              poolId: Number(args.poolId),
+              timestamp: 0,
+              txHash: event.transactionHash,
+              blockNumber: event.blockNumber
+            });
+          }
         });
-        unstakedEvents.forEach((event: any) => {
-          allEvents.push({
-            id: `unstake-${event.transactionHash}-${event.logIndex}`,
-            type: 'Unstake',
-            amount: ethers.formatUnits(event.args.amount, 18),
-            poolId: Number(event.args.poolId),
-            timestamp: 0,
-            txHash: event.transactionHash,
-            blockNumber: event.blockNumber
-          });
+        
+        unstakedEvents.forEach((event) => {
+          const args = (event as ethers.EventLog).args;
+          if (args) {
+            allEvents.push({
+              id: `unstake-${event.transactionHash}-${event.index}`,
+              type: 'Unstake',
+              amount: ethers.formatUnits(args.amount, 18),
+              poolId: Number(args.poolId),
+              timestamp: 0,
+              txHash: event.transactionHash,
+              blockNumber: event.blockNumber
+            });
+          }
         });
-        claimedEvents.forEach((event: any) => {
-          allEvents.push({
-            id: `claim-${event.transactionHash}-${event.logIndex}`,
-            type: 'Claim',
-            amount: ethers.formatUnits(event.args.amount, 18),
-            poolId: 0,
-            timestamp: 0,
-            txHash: event.transactionHash,
-            blockNumber: event.blockNumber
-          });
+        
+        claimedEvents.forEach((event) => {
+          const args = (event as ethers.EventLog).args;
+          if (args) {
+            allEvents.push({
+              id: `claim-${event.transactionHash}-${event.index}`,
+              type: 'Claim',
+              amount: ethers.formatUnits(args.amount, 18),
+              poolId: 0,
+              timestamp: 0,
+              txHash: event.transactionHash,
+              blockNumber: event.blockNumber
+            });
+          }
         });
       }
-      // Sort and trim history
+      
       allEvents.sort((a, b) => b.blockNumber - a.blockNumber);
       const history = allEvents.slice(0, 10);
-      console.log('[fetchTransactionHistory] Found transactions:', history.length);
+      logger.log('[fetchTransactionHistory] Found transactions:', history.length);
       setTransactionHistory(history);
       
     } catch (error) {
-      console.error('[fetchTransactionHistory] Error:', error);
+      logger.error('[fetchTransactionHistory] Error:', error);
       toast.error('Failed to fetch transaction history.');
       setTransactionHistory([]);
     }
   };
 
-  // Pool'ları kontrattan dinamik oku
   const fetchPools = async () => {
     if (!contract) return;
     try {
-      console.log('[fetchPools] Starting...');
+      logger.log('[fetchPools] Starting...');
       const count = await contract.poolCount();
-      console.log('[fetchPools] Pool count:', count.toString());
+      logger.log('[fetchPools] Pool count:', count.toString());
       
       const poolArr: StakingPool[] = [];
       for (let i = 0; i < Number(count); i++) {
@@ -216,36 +219,33 @@ export const useStaking = () => {
           maxStakePerUser: ethers.formatUnits(data.maxStakePerUser ?? 0n, 18),
           isActive: !!data.isActive,
         };
-        console.log(`[fetchPools] Pool ${i}:`, pool);
+        logger.log(`[fetchPools] Pool ${i}:`, pool);
         poolArr.push(pool);
       }
       setPools(poolArr);
-      console.log('[fetchPools] Pools set:', poolArr);
+      logger.log('[fetchPools] Pools set:', poolArr);
     } catch (err) {
-      console.error('[fetchPools] Error:', err);
+      logger.error('[fetchPools] Error:', err);
       setPools([]);
     }
   };
 
-  // Enhanced fetchStakes with better filtering for active stakes
   const fetchStakes = async () => {
     if (!account || !contract) {
-      console.log('[fetchStakes] No account or contract');
+      logger.log('[fetchStakes] No account or contract');
       setStakes([]);
       return;
     }
     
-    console.log('[fetchStakes] Starting for account:', account);
+    logger.log('[fetchStakes] Starting for account:', account);
     
     try {
-      // Determine active pool IDs, with fallback if userActivePoolIds reverts
       let activePoolIds: number[] = [];
       try {
-        activePoolIds = (await contract.userActivePoolIds(account)).map((x: any) => Number(x));
-        console.log('[fetchStakes] Active pool IDs from contract:', activePoolIds);
+        activePoolIds = (await contract.userActivePoolIds(account)).map((x: bigint) => Number(x));
+        logger.log('[fetchStakes] Active pool IDs from contract:', activePoolIds);
       } catch (fallbackErr) {
-        console.error('[fetchStakes] userActivePoolIds failed, falling back to manual getUserStakeInfo lookup', fallbackErr);
-        console.warn('Cannot fetch active pool IDs; falling back to manual getUserStakeInfo lookup.');
+        logger.error('[fetchStakes] userActivePoolIds failed, falling back to manual lookup', fallbackErr);
         try {
           const count = await contract.poolCount();
           for (let i = 0; i < Number(count); i++) {
@@ -254,12 +254,12 @@ export const useStaking = () => {
               const stakedAmt = Number(ethers.formatUnits(info[0] ?? 0n, 18));
               if (stakedAmt > 0) activePoolIds.push(i);
             } catch (innerErr) {
-              console.error(`[fetchStakes] Error checking getUserStakeInfo for pool ${i}:`, innerErr);
+              logger.error(`[fetchStakes] Error checking getUserStakeInfo for pool ${i}:`, innerErr);
             }
           }
-          console.log('[fetchStakes] Active pool IDs from manual fallback:', activePoolIds);
+          logger.log('[fetchStakes] Active pool IDs from manual fallback:', activePoolIds);
         } catch (countErr) {
-          console.error('[fetchStakes] Error fetching pool count for fallback:', countErr);
+          logger.error('[fetchStakes] Error fetching pool count for fallback:', countErr);
         }
       }
 
@@ -280,29 +280,28 @@ export const useStaking = () => {
               apy: pool?.apy ?? 0,
               duration: pool?.duration ?? 0,
             };
-            console.log(`[fetchStakes] Added stake for pool ${pid}:`, stakeInfo);
+            logger.log(`[fetchStakes] Added stake for pool ${pid}:`, stakeInfo);
             stakeArr.push(stakeInfo);
           } else {
-            console.log(`[fetchStakes] Skipping pool ${pid} - no active stake (amount: ${stakeAmount})`);
+            logger.log(`[fetchStakes] Skipping pool ${pid} - no active stake`);
           }
         } catch (poolError) {
-          console.error(`[fetchStakes] Error getting info for pool ${pid}:`, poolError);
+          logger.error(`[fetchStakes] Error getting info for pool ${pid}:`, poolError);
         }
       }
-      console.log('[fetchStakes] Final stakes array:', stakeArr);
+      logger.log('[fetchStakes] Final stakes array:', stakeArr);
       setStakes(stakeArr);
     } catch (err) {
-      console.error('[fetchStakes] Error:', err);
+      logger.error('[fetchStakes] Error:', err);
       setStakes([]);
     }
   };
 
-  // Enhanced stake function with proper transaction confirmation
   const stake = async (amount: string, poolId: number) => {
     if (!account || !signer || !contract) throw new Error('Wallet not connected');
     setIsLoading(true);
     
-    console.log('[stake] Starting stake process:', { amount, poolId });
+    logger.log('[stake] Starting stake process:', { amount, poolId });
     
     try {
       if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
@@ -318,105 +317,97 @@ export const useStaking = () => {
         throw new Error('Stake exceeds max allowed per user for this pool!');
       }
       
-      // Approve and stake
       await approve(STAKING_CONTRACT_ADDRESS, amount);
       
-      const contractWithSigner = contract.connect(signer) as any;
+      const contractWithSigner = contract.connect(signer) as Contract;
       const amountInWei = ethers.parseUnits(amount, 18);
       
       const tx = await contractWithSigner.stake(poolId, amountInWei);
-      console.log('[stake] Transaction sent:', tx.hash);
+      logger.log('[stake] Transaction sent:', tx.hash);
       
-      // Wait for transaction confirmation
       const receipt = await tx.wait();
-      console.log('[stake] Transaction confirmed:', receipt);
+      logger.log('[stake] Transaction confirmed:', receipt);
       
       toast.success(`Successfully staked ${amount} modX in Pool #${poolId}!`);
       
-      // Refresh data after confirmed transaction
       await Promise.all([
         fetchStakes(),
         fetchBalance(),
         fetchPools(),
         fetchTransactionHistory()
       ]);
-    } catch (error: any) {
-      console.error('[stake] Error:', error);
-      toast.error('Failed to stake tokens: ' + (error?.message ?? error));
+    } catch (error: unknown) {
+      logger.error('[stake] Error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error('Failed to stake tokens: ' + errorMessage);
       throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Enhanced unstake with proper transaction confirmation
   const unstake = async (poolId: number) => {
     if (!signer || !contract) throw new Error('Wallet not connected');
     setIsLoading(true);
     try {
-      const contractWithSigner = contract.connect(signer) as any;
+      const contractWithSigner = contract.connect(signer) as Contract;
       const tx = await contractWithSigner.unstake(poolId);
-      console.log('[unstake] Transaction sent:', tx.hash);
+      logger.log('[unstake] Transaction sent:', tx.hash);
       
-      // Wait for transaction confirmation
       const receipt = await tx.wait();
-      console.log('[unstake] Transaction confirmed:', receipt);
+      logger.log('[unstake] Transaction confirmed:', receipt);
       
       toast.success('Successfully unstaked tokens!');
       
-      // Refresh data after confirmed transaction
       await Promise.all([
         fetchStakes(),
         fetchBalance(),
         fetchPools(),
         fetchTransactionHistory()
       ]);
-    } catch (err: any) {
-      console.error('[unstake] Error:', err);
-      toast.error('Failed to unstake tokens: ' + (err?.message ?? err));
+    } catch (err: unknown) {
+      logger.error('[unstake] Error:', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error('Failed to unstake tokens: ' + errorMessage);
       throw err;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fixed claimRewards function with proper transaction confirmation and immediate UI update
   const claimRewards = async (poolId: number) => {
     if (!signer || !contract) throw new Error('Wallet not connected');
     setIsLoading(true);
     
     try {
-      const contractWithSigner = contract.connect(signer) as any;
+      const contractWithSigner = contract.connect(signer) as Contract;
       const tx = await contractWithSigner.claimRewards(poolId);
-      console.log('[claimRewards] Transaction sent:', tx.hash);
+      logger.log('[claimRewards] Transaction sent:', tx.hash);
       
-      // Wait for transaction confirmation before updating UI
       const receipt = await tx.wait();
-      console.log('[claimRewards] Transaction confirmed:', receipt);
+      logger.log('[claimRewards] Transaction confirmed:', receipt);
       
       toast.success('Rewards claimed successfully!');
       
-      // After transaction is confirmed, refresh all data from blockchain
       await Promise.all([
-        fetchStakes(), // This will get fresh data from contract
-        fetchBalance(), // Update token balance
-        fetchPools(),    // Update pool data
-        fetchTransactionHistory() // Update transaction history
+        fetchStakes(),
+        fetchBalance(),
+        fetchPools(),
+        fetchTransactionHistory()
       ]);
       
-    } catch (err: any) {
-      console.error('[claimRewards] Error:', err);
-      toast.error('Failed to claim rewards: ' + (err?.message ?? err));
+    } catch (err: unknown) {
+      logger.error('[claimRewards] Error:', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error('Failed to claim rewards: ' + errorMessage);
       throw err;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Auto-refresh setup for real-time rewards (reduced frequency to avoid spam)
   useEffect(() => {
     if (account && contract && stakes.length > 0) {
-      // Start auto-refresh every 60 seconds for rewards
       const interval = setInterval(() => {
         fetchStakes();
       }, 60000);
@@ -434,23 +425,22 @@ export const useStaking = () => {
     }
   }, [account, contract, stakes.length]);
 
-  // Handle wallet/chain changes
   useEffect(() => {
     const handleAccountsChanged = () => {
-      console.log('[useStaking] Account changed, clearing data');
+      logger.log('[useStaking] Account changed, clearing data');
       setStakes([]);
       setPools([]);
       setTransactionHistory([]);
     };
 
     const handleChainChanged = () => {
-      console.log('[useStaking] Chain changed, refreshing data');
+      logger.log('[useStaking] Chain changed, refreshing data');
       if (contract) {
         fetchPools();
       }
     };
 
-    if (window.ethereum) {
+    if (typeof window !== 'undefined' && window.ethereum) {
       window.ethereum.on('accountsChanged', handleAccountsChanged);
       window.ethereum.on('chainChanged', handleChainChanged);
       
@@ -461,31 +451,27 @@ export const useStaking = () => {
     }
   }, [contract]);
 
-  // Pool'ları kontrattan dinamik oku
   useEffect(() => {
     if (contract) {
-      console.log('[useEffect] Contract available, fetching pools...');
+      logger.log('[useEffect] Contract available, fetching pools...');
       fetchPools();
     }
-    // eslint-disable-next-line
   }, [contract]);
 
   useEffect(() => {
     fetchPools();
-    // eslint-disable-next-line
   }, []);
 
   useEffect(() => {
     if (account && contract && pools.length > 0) {
-      console.log('[useEffect] Account, contract and pools available, fetching stakes...');
+      logger.log('[useEffect] Account, contract and pools available, fetching stakes...');
       fetchStakes();
       fetchTransactionHistory();
     } else {
-      console.log('[useEffect] Clearing stakes - missing:', { account: !!account, contract: !!contract, poolsLength: pools.length });
+      logger.log('[useEffect] Clearing stakes - missing:', { account: !!account, contract: !!contract, poolsLength: pools.length });
       setStakes([]);
       setTransactionHistory([]);
     }
-    // eslint-disable-next-line
   }, [account, contract, pools]);
 
   return {

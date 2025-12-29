@@ -12,6 +12,7 @@ const translations = {
   en: {
     'footer.slogan': 'The future of decentralized finance on BSC. Stake, swap, and explore with confidence in the next generation of DeFi innovation.',
     // Header Navigation
+    'header.nft': 'NFTs',
     'header.home': 'Home',
     'header.stake': 'Stake',
     'header.swap': 'Swap',
@@ -163,6 +164,30 @@ const translations = {
     'swap.price': 'Price',
     'swap.change24h': '24h Change',
     
+    // Pool/Liquidity
+    'pool.title': 'Liquidity Pool',
+    'pool.addLiquidity': 'Add Liquidity',
+    'pool.removeLiquidity': 'Remove Liquidity',
+    'pool.yourPosition': 'Your Position',
+    'pool.noPosition': 'No liquidity position found',
+    'pool.noPositionDesc': 'Add liquidity to the modX/BNB pool to start earning fees',
+    'pool.poolShare': 'Pool Share',
+    'pool.lpTokens': 'LP Tokens',
+    'pool.modXAmount': 'modX Amount',
+    'pool.bnbAmount': 'BNB Amount',
+    'pool.balance': 'Balance',
+    'pool.addLiquidityBtn': 'Add Liquidity',
+    'pool.removeLiquidityBtn': 'Remove Liquidity',
+    'pool.adding': 'Adding Liquidity...',
+    'pool.removing': 'Removing Liquidity...',
+    'pool.history': 'Liquidity History',
+    'pool.noHistory': 'No liquidity history yet',
+    'pool.added': 'Added',
+    'pool.removed': 'Removed',
+    'pool.removePercent': 'Remove Percentage',
+    'pool.confirmRemove': 'Confirm Remove',
+    'pool.poolInfo': 'When you add liquidity, you receive LP tokens representing your share of the pool.',
+    
     // Market
     'market.title': 'Market Overview',
     'market.subtitle': 'Real-time cryptocurrency prices and market data',
@@ -251,6 +276,7 @@ const translations = {
   tr: {
     // Header Navigation
     'header.home': 'Ana Sayfa',
+    'header.nft': 'NFTs',
     'header.stake': 'Stake',
     'header.swap': 'Takas',
     'header.market': 'Piyasa',
@@ -403,6 +429,30 @@ const translations = {
     'swap.marketCap': 'Piyasa Değeri',
     'swap.price': 'Fiyat',
     'swap.change24h': '24s Değişim',
+    
+    // Pool/Liquidity
+    'pool.title': 'Likidite Havuzu',
+    'pool.addLiquidity': 'Likidite Ekle',
+    'pool.removeLiquidity': 'Likidite Çıkar',
+    'pool.yourPosition': 'Pozisyonunuz',
+    'pool.noPosition': 'Likidite pozisyonu bulunamadı',
+    'pool.noPositionDesc': 'Ücret kazanmaya başlamak için modX/BNB havuzuna likidite ekleyin',
+    'pool.poolShare': 'Havuz Payı',
+    'pool.lpTokens': 'LP Token',
+    'pool.modXAmount': 'modX Miktarı',
+    'pool.bnbAmount': 'BNB Miktarı',
+    'pool.balance': 'Bakiye',
+    'pool.addLiquidityBtn': 'Likidite Ekle',
+    'pool.removeLiquidityBtn': 'Likidite Çıkar',
+    'pool.adding': 'Likidite Ekleniyor...',
+    'pool.removing': 'Likidite Çıkarılıyor...',
+    'pool.history': 'Likidite Geçmişi',
+    'pool.noHistory': 'Henüz likidite geçmişi yok',
+    'pool.added': 'Eklendi',
+    'pool.removed': 'Çıkarıldı',
+    'pool.removePercent': 'Çıkarma Yüzdesi',
+    'pool.confirmRemove': 'Çıkarmayı Onayla',
+    'pool.poolInfo': 'Likidite eklediğinizde, havuzdaki payınızı temsil eden LP token alırsınız.',
     
     // Market
     'market.title': 'Piyasa Genel Bakış',

@@ -30,6 +30,7 @@ const Header = () => {
   const navItems = [
     { path: '/', label: t('header.home') },
     { path: '/stake', label: t('header.stake') },
+     { path: '/nfts', label: t('header.nft') },
     { path: '/swap', label: t('header.swap') },
     { path: '/profile', label: t('header.profile') },
     { path: '/market', label: 'Market' },

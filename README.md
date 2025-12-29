@@ -1,111 +1,143 @@
-<<<<<<< HEAD
-# Welcome to your Lovable project
+# modX Platform
 
-## Project info
+<div align="center">
 
-**URL**: https://lovable.dev/projects/6e2b0788-d2c4-4860-be18-dedb5f91b494
+![modX Logo](https://img.shields.io/badge/modX-DeFi%20Platform-00ff88?style=for-the-badge&logo=ethereum&logoColor=white)
 
-## How can I edit this code?
+**Next-generation DeFi platform on BSC Testnet**
 
-There are several ways of editing your application.
+[![License](https://img.shields.io/badge/License-W.A.T.A.M.-blue.svg)](LICENSE)
+[![React](https://img.shields.io/badge/React-18.3-61dafb.svg)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178c6.svg)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-5.4-646cff.svg)](https://vitejs.dev/)
 
-**Use Lovable**
+[Demo](#demo) • [Features](#features) • [Installation](#installation) • [Deployment](#deployment)
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/6e2b0788-d2c4-4860-be18-dedb5f91b494) and start prompting.
+</div>
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+## Features
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- **🔒 Staking** - Stake modX tokens with flexible lock periods and earn rewards
+- **🔄 Token Swap** - Instant token exchange via PancakeSwap integration
+- **💧 Liquidity Pools** - Add/remove liquidity and earn trading fees
+- **🎨 NFT Dashboard** - Mint, transfer, and manage licensed NFTs
+- **📊 Market Data** - Real-time price tracking from Binance API
+- **🌐 Multi-language** - English & Turkish support (extensible)
+- **🌙 Dark Mode** - Eye-friendly dark theme
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Tech Stack
 
-Follow these steps:
+| Category | Technology |
+|----------|------------|
+| Frontend | React 18, TypeScript, Vite |
+| Styling | Tailwind CSS, shadcn/ui |
+| Blockchain | ethers.js v6, BSC Testnet |
+| State | TanStack Query, React Context |
+| Backend | Supabase |
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## Installation
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Prerequisites
 
-# Step 3: Install the necessary dependencies.
-npm i
+- Node.js 18+
+- npm or bun
+- MetaMask wallet
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### Setup
+
+```bash
+# Clone repository
+git clone https://github.com/your-username/modx-platform.git
+cd modx-platform
+
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.example .env.local
+# Edit .env.local with your values
+
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Environment Variables
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```env
+VITE_MODX_NFT_ADDRESS=0x_your_nft_contract_address
+NEXT_PUBLIC_UPLOAD_API_URL=https://your-api.com/upload
+```
 
-**Use GitHub Codespaces**
+## Scripts
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Production build |
+| `npm run preview` | Preview production build |
+| `npm run lint` | Run ESLint |
 
-## What technologies are used for this project?
+## Deployment
 
-This project is built with:
+### Netlify (Recommended)
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+1. Connect your GitHub repository to Netlify
+2. Configure build settings:
+   - **Build command:** `npm run build`
+   - **Publish directory:** `dist`
+   - **Node version:** 18
+3. Add environment variables in Netlify dashboard
+4. Deploy!
 
-## How can I deploy this project?
+The `netlify.toml` file is pre-configured for SPA routing.
 
-Simply open [Lovable](https://lovable.dev/projects/6e2b0788-d2c4-4860-be18-dedb5f91b494) and click on Share -> Publish.
+### Manual Deployment
 
-## Can I connect a custom domain to my Lovable project?
+```bash
+npm run build
+# Upload 'dist' folder to your hosting provider
+```
 
-Yes, you can!
+## Smart Contracts (BSC Testnet)
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+| Contract | Address |
+|----------|---------|
+| modX Token | `0xB6322eD8561604Ca2A1b9c17e4d02B957EB242fe` |
+| Staking | `0xab3544A6f2aF70064c5B5D3f0E74323DB9a81945` |
+| PancakeSwap Router | `0x9ac64cc6e4415144c455bd8e4837fea55603e5c3` |
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## Project Structure
+
+```
+src/
+├── components/     # UI components
+├── context/        # React contexts (Web3, Language, Theme)
+├── hooks/          # Custom hooks (useStaking, useSwap, useLiquidity)
+├── pages/          # Route pages
+├── lib/            # Utilities
+└── config/         # Constants & configuration
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing`)
+5. Open Pull Request
+
+## License
+
+This project is licensed under the **W.A.T.A.M. License** - see [LICENSE](LICENSE) file.
 
 ---
-## 📝 Geliştirme Notları (Oturum Özeti)
 
-Aşağıdaki önemli değişiklikler yerelde uygulandı ve takip edilmesi önerilir:
+<div align="center">
 
-- **userActivePoolIds fallback**: `useStaking.tsx` içinde `userActivePoolIds` geri dönerken hata (revert) alınması durumunda `getUserStakeInfo` kullanarak manuel aktif havuz ID listesi oluşturuldu.
-- **Etkinlik geçmişi chunk’lı çekim**: `fetchTransactionHistory` fonksiyonu, BSC Testnet RPC limit aşımını önlemek için 5.000 blokluk segmentlerle `Staked`, `Unstaked` ve `RewardsClaimed` olaylarını topluyor.
-- **Tekrarlı UI yenileme**: Stake/unstake/claim işlemleri için `tx.wait()` sonrası `fetchStakes()`, `fetchPools()`, `fetchBalance()` ve `fetchTransactionHistory()` çağrıları eklendi.
-- **Hata bildirimleri**: Critical kontrat çağrıları (`userActivePoolIds`, `fetchTransactionHistory` vb.) `try/catch` içinde toast mesajlarıyla kullanıcıya iletiliyor.
-- **Pool kart güncellemesi**: Havuz kartlarında APY, kilit süresi, toplam stake tutarı ve aktif/pasif durumu gösteriliyor.
+**W.A.T.A.M.** - We Are The Anonymous Minds
 
-### 🚀 Sonraki Adımlar
+Building the decentralized future, one block at a time.
 
-1. `src/hooks/useStaking.tsx` içindeki `deploymentBlock` değerini gerçek deploy bloğunuzla güncelleyin.
-2. `npm install` ile bağımlılıkları yükleyin.
-3. `npm run dev` komutuyla yerel geliştirme sunucusunu başlatın.
-4. Tarayıcıda http://localhost:5173 adresini açın, MetaMask üzerinden BSC Testnet’e bağlanın ve stake arayüzünü kontrol edin.
-
-Bu notlar, bilgisayar yeniden başlatıldığında kaldığınız yerden hızla devam etmenize yardımcı olacaktır.
-=======
-🚀 Welcome to the MODX Platform – an advanced token and staking ecosystem built on Ethereum-compatible chains.
-
-🪙 MODX Token is a flexible ERC-20 token with burnable, pausable, and fully customizable vesting capabilities for contributors and early supporters.
-
-💎 Stake your MODX tokens in time-locked pools and earn competitive APYs:
-- 30 Days – 12% APY
-- 90 Days – 18% APY
-- 180 Days – 25% APY
-- 365 Days – 36% APY
-
-🔐 Users retain full control of their tokens while benefiting from secure reward calculations and emergency withdrawal options.
-
-🛠 Built with OpenZeppelin's audited contracts and fully tested, MODX combines security, flexibility, and usability in a decentralized environment.
-
-🌍 Join the new wave of financial empowerment with MODX.
->>>>>>> 3881c69ba4994f44136d96b2da359cb3364d5ba4
+</div>

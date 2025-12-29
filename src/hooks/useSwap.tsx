@@ -1,33 +1,34 @@
-
 import { useState, useMemo, useEffect } from 'react';
 import { ethers, Contract } from 'ethers';
 import { useWeb3 } from '@/context/Web3Context';
 import { useModXToken } from './useModXToken';
 import { useRealTimePrice } from './useRealTimePrice';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 // Router info for PancakeSwap testnet
 export const PANCAKE_ROUTER_ABI = [
+  "function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory)",
   "function swapExactTokensForETHSupportingFeeOnTransferTokens(uint amountIn,uint amountOutMin,address[] calldata path,address to,uint deadline) external",
   "function swapExactETHForTokensSupportingFeeOnTransferTokens(uint amountOutMin,address[] calldata path,address to,uint deadline) external payable",
   "function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint amountIn,uint amountOutMin,address[] calldata path,address to,uint deadline) external",
-  "function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory)",
+  "function addLiquidityETH(address token, uint amountTokenDesired, uint amountTokenMin, uint amountETHMin, address to, uint deadline) external payable returns (uint, uint, uint)",
   "function WETH() external pure returns (address)"
 ];
 export const PANCAKE_ROUTER_ADDRESS = '0x9ac64cc6e4415144c455bd8e4837fea55603e5c3'; // BSC Testnet Router
 
 // Native and bridge token addresses for BSC Testnet
 export const NATIVE_BNB_ADDRESS = '0x0000000000000000000000000000000000000000';
-export const WBNB_ADDRESS = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c';
+export const WBNB_ADDRESS = '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd'; // Correct WBNB for BSC Testnet
 
 // Generic ERC20 ABI for approvals
-const ERC20_ABI = ["function approve(address spender, uint256 amount) external returns (bool)"];
+const ERC20_ABI = [
+  "function approve(address spender, uint256 amount) external returns (bool)",
+  "function allowance(address owner, address spender) external view returns (uint256)"
+];
 
 /**
  * Dynamically resolve a valid swap path using PancakeRouter.getAmountsOut.
- * Tries direct [from, to], then [from, WBNB, to] as a bridge.
- * Returns the first valid path or null if none found.
- * Throws unexpected errors.
  */
 export async function resolveSwapPath(
   router: Contract,
@@ -42,8 +43,9 @@ export async function resolveSwapPath(
   try {
     await router.getAmountsOut(amountIn, directPath);
     return directPath;
-  } catch (err: any) {
-    if (!err.message.includes('PancakeRouter: INVALID_PATH') && !err.message.toLowerCase().includes('invalid path')) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : '';
+    if (!message.includes('PancakeRouter: INVALID_PATH') && !message.toLowerCase().includes('invalid path')) {
       throw err;
     }
   }
@@ -52,8 +54,9 @@ export async function resolveSwapPath(
   try {
     await router.getAmountsOut(amountIn, bridgePath);
     return bridgePath;
-  } catch (err: any) {
-    if (!err.message.includes('PancakeRouter: INVALID_PATH') && !err.message.toLowerCase().includes('invalid path')) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : '';
+    if (!message.includes('PancakeRouter: INVALID_PATH') && !message.toLowerCase().includes('invalid path')) {
       throw err;
     }
   }
@@ -102,7 +105,7 @@ export const useSwap = () => {
       const balanceEth = ethers.formatEther(balanceWei);
       setBnbBalance(parseFloat(balanceEth).toFixed(6));
     } catch (error) {
-      console.error('Error fetching BNB balance:', error);
+      logger.error('Error fetching BNB balance:', error);
       setBnbBalance('0.0');
     }
   };
@@ -111,8 +114,6 @@ export const useSwap = () => {
   useEffect(() => {
     if (account && provider) {
       fetchBNBBalance();
-      
-      // Refresh every 30 seconds
       const interval = setInterval(fetchBNBBalance, 30000);
       return () => clearInterval(interval);
     }
@@ -128,7 +129,7 @@ export const useSwap = () => {
     }
   }, [account]);
 
-  // Extended token list with all new tokens
+  // Extended token list
   const tokens = useMemo<Token[]>(() => [
     {
       symbol: 'modX',
@@ -199,18 +200,40 @@ export const useSwap = () => {
   // Real-time exchange rates using price data
   const getExchangeRate = (fromToken: string, toToken: string): number => {
     if (!priceData) return 1;
-
     const fromPrice = priceData[fromToken]?.price || (fromToken === 'modX' ? 0.251 : 1);
     const toPrice = priceData[toToken]?.price || (toToken === 'modX' ? 0.251 : 1);
-    
     return fromPrice / toPrice;
   };
 
-  const calculateSwapAmount = (inputAmount: string, fromToken: string, toToken: string) => {
-    if (!inputAmount || isNaN(Number(inputAmount))) return '0';
-    const rate = getExchangeRate(fromToken, toToken);
-    const slippageAdjustment = 1 - (slippage / 100);
-    return (Number(inputAmount) * rate * slippageAdjustment).toFixed(6);
+  const calculateSwapAmount = async (inputAmount: string, fromToken: string, toToken: string): Promise<string> => {
+    if (!inputAmount || isNaN(Number(inputAmount)) || !provider || Number(inputAmount) <= 0) return '0';
+
+    const from = tokens.find(t => t.symbol === fromToken);
+    const to = tokens.find(t => t.symbol === toToken);
+    if (!from || !to) return '0';
+
+    try {
+      const router = new Contract(PANCAKE_ROUTER_ADDRESS, PANCAKE_ROUTER_ABI, provider);
+      const amountIn = ethers.parseUnits(inputAmount, from.decimals);
+      
+      const path = [
+        from.address === NATIVE_BNB_ADDRESS ? WBNB_ADDRESS : from.address,
+        to.address === NATIVE_BNB_ADDRESS ? WBNB_ADDRESS : to.address
+      ];
+
+      if (path[0] !== WBNB_ADDRESS && path[1] !== WBNB_ADDRESS) {
+        const directPathWorks = await router.getAmountsOut(amountIn, path).catch(() => false);
+        if (!directPathWorks) {
+          path.splice(1, 0, WBNB_ADDRESS);
+        }
+      }
+
+      const amountsOut = await router.getAmountsOut(amountIn, path);
+      return ethers.formatUnits(amountsOut[amountsOut.length - 1], to.decimals);
+    } catch (error) {
+      logger.error("Failed to calculate swap amount:", error);
+      return '0';
+    }
   };
 
   const calculatePriceImpact = (inputAmount: string): number => {
@@ -221,7 +244,6 @@ export const useSwap = () => {
     return 0.5;
   };
 
-  // Save swap to history
   const saveSwapToHistory = (from: string, to: string, fromAmount: string, toAmount: string, hash: string) => {
     const newSwap: SwapHistory = {
       id: Math.random().toString(36).substring(7),
@@ -234,7 +256,7 @@ export const useSwap = () => {
       timestamp: Date.now()
     };
 
-    const updatedHistory = [newSwap, ...swapHistory].slice(0, 10); // Keep last 10 swaps
+    const updatedHistory = [newSwap, ...swapHistory].slice(0, 10);
     setSwapHistory(updatedHistory);
     
     if (account) {
@@ -242,9 +264,6 @@ export const useSwap = () => {
     }
   };
 
-  /**
-   * Execute a swap between any two tokens/BNB using dynamic path resolution.
-   */
   const executeSwap = async (
     fromToken: string,
     toToken: string,
@@ -262,7 +281,6 @@ export const useSwap = () => {
         throw new Error('Please enter a valid amount');
       }
 
-      // Token metadata
       const fromInfo = tokens.find((t) => t.symbol === fromToken);
       const toInfo = tokens.find((t) => t.symbol === toToken);
       if (!fromInfo || !toInfo) {
@@ -279,21 +297,19 @@ export const useSwap = () => {
         toInfo.decimals
       );
 
-      // Resolve best path
       const path = await resolveSwapPath(router, fromInfo.address, toInfo.address, amountIn);
       if (!path) {
         toast.error('No swap path available for selected tokens');
         return;
       }
 
-      // Approve if ERC20
       const useNativeIn = fromInfo.address === NATIVE_BNB_ADDRESS;
       if (!useNativeIn) {
         const tokenContract = new Contract(fromInfo.address, ERC20_ABI, signer);
         await tokenContract.approve(PANCAKE_ROUTER_ADDRESS, amountIn);
       }
 
-      let tx: any;
+      let tx: ethers.ContractTransactionResponse;
       if (useNativeIn) {
         tx = await router.swapExactETHForTokensSupportingFeeOnTransferTokens(
           minAmountOut,
@@ -323,17 +339,74 @@ export const useSwap = () => {
       toast.info('Transaction sent! Waiting for confirmation...');
       const receipt = await tx.wait();
       toast.success(`Swapped ${fromAmount} ${fromToken} → ${toAmount} ${toToken}`);
-      saveSwapToHistory(fromToken, toToken, fromAmount, toAmount, receipt.hash);
+      if (receipt) {
+        saveSwapToHistory(fromToken, toToken, fromAmount, toAmount, receipt.hash);
+      }
 
       await Promise.all([fetchBNBBalance(), fetchBalance()]);
-    } catch (error: any) {
-      console.error('Swap error:', error);
-      const msg = error?.message ?? 'Swap failed';
+    } catch (error: unknown) {
+      logger.error('Swap error:', error);
+      const msg = error instanceof Error ? error.message : 'Swap failed';
       toast.error(
         msg.includes('PancakeRouter: INVALID_PATH')
           ? 'Swap path invalid or liquidity insufficient'
           : msg
       );
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addLiquidity = async (modXAmount: string, bnbAmount: string) => {
+    if (!account || !signer) {
+      toast.error('Please connect your wallet!');
+      return;
+    }
+    if (!modXAmount || !bnbAmount || Number(modXAmount) <= 0 || Number(bnbAmount) <= 0) {
+      toast.error('Please enter valid amounts for liquidity.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const router = new Contract(PANCAKE_ROUTER_ADDRESS, PANCAKE_ROUTER_ABI, signer);
+      const modXTokenInfo = tokens.find(t => t.symbol === 'modX');
+      if (!modXTokenInfo) throw new Error("modX token info not found");
+
+      const amountModXDesired = ethers.parseUnits(modXAmount, modXTokenInfo.decimals);
+      const amountBnbDesired = ethers.parseEther(bnbAmount);
+      const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
+
+      const modXContract = new Contract(modXTokenInfo.address, ERC20_ABI, signer);
+      const allowance = await modXContract.allowance(account, PANCAKE_ROUTER_ADDRESS);
+      if (allowance < amountModXDesired) {
+        toast.info("Approving modX token for the router...");
+        const approveTx = await modXContract.approve(PANCAKE_ROUTER_ADDRESS, amountModXDesired);
+        await approveTx.wait();
+        toast.success("modX token approved!");
+      }
+
+      const tx = await router.addLiquidityETH(
+        modXTokenInfo.address,
+        amountModXDesired,
+        0,
+        0,
+        account,
+        deadline,
+        { value: amountBnbDesired }
+      );
+
+      toast.info("Adding liquidity... waiting for confirmation.");
+      await tx.wait();
+      toast.success("Successfully added liquidity!");
+      
+      await Promise.all([fetchBNBBalance(), fetchBalance()]);
+
+    } catch (error: unknown) {
+      logger.error("Failed to add liquidity:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to add liquidity: ${errorMessage}`);
       throw error;
     } finally {
       setIsLoading(false);
@@ -349,6 +422,7 @@ export const useSwap = () => {
     calculateSwapAmount,
     calculatePriceImpact,
     executeSwap,
+    addLiquidity,
     resolveSwapPath,
     getSwapHistory: () => swapHistory,
     bnbBalance,

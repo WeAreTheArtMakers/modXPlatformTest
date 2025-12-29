@@ -30,15 +30,15 @@ const ProfileSettings = () => {
     sessionTimeout: '30', // minutes
   });
 
-  const handleSettingChange = (key: string, value: any) => {
+  const handleSettingChange = (key: string, value: string | boolean) => {
     setSettings(prev => ({
       ...prev,
       [key]: value
     }));
     
     // Handle language change immediately
-    if (key === 'language') {
-      setLanguage(value);
+    if (key === 'language' && typeof value === 'string') {
+      setLanguage(value as 'en' | 'tr');
       toast.success(value === 'tr' ? 'Dil Türkçe olarak değiştirildi' : 'Language changed to English');
     }
   };

@@ -1,5 +1,5 @@
-
 import { useState, useEffect } from 'react';
+import { logger } from '@/lib/logger';
 
 interface PriceData {
   symbol: string;
@@ -9,28 +9,30 @@ interface PriceData {
   marketCap: number;
 }
 
+interface BinanceTickerData {
+  symbol: string;
+  lastPrice: string;
+  priceChangePercent: string;
+  volume: string;
+}
+
 export const useRealTimePrice = () => {
   const [priceData, setPriceData] = useState<{ [key: string]: PriceData }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // CoinMarketCap API key
-  const CMC_API_KEY = 'f90e1365-99a7-4e1a-9082-8c0d81f38d25';
   
   const fetchPriceData = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      // Binance API for real-time prices (no API key needed)
       const binanceResponse = await fetch('https://api.binance.com/api/v3/ticker/24hr');
-      const binanceData = await binanceResponse.json();
+      const binanceData: BinanceTickerData[] = await binanceResponse.json();
       
-      // Filter for tokens we care about - expanded list
       const relevantTokens = ['BNBUSDT', 'BTCUSDT', 'ETHUSDT', 'CAKEUSDT', 'ADAUSDT', 'DOTUSDT', 'LINKUSDT'];
       const filteredData: { [key: string]: PriceData } = {};
       
-      binanceData.forEach((token: any) => {
+      binanceData.forEach((token) => {
         if (relevantTokens.includes(token.symbol)) {
           const symbol = token.symbol.replace('USDT', '');
           filteredData[symbol] = {
@@ -38,23 +40,21 @@ export const useRealTimePrice = () => {
             price: parseFloat(token.lastPrice),
             change24h: parseFloat(token.priceChangePercent),
             volume24h: parseFloat(token.volume) * parseFloat(token.lastPrice),
-            marketCap: 0 // Will be calculated based on circulating supply
+            marketCap: 0
           };
         }
       });
       
-      // Add WETH with ETH price data
       if (filteredData['ETH']) {
         filteredData['WETH'] = {
           symbol: 'WETH',
           price: filteredData['ETH'].price,
           change24h: filteredData['ETH'].change24h,
-          volume24h: filteredData['ETH'].volume24h * 0.1, // Approx 10% of ETH volume
-          marketCap: filteredData['ETH'].marketCap * 0.001 // Much smaller supply
+          volume24h: filteredData['ETH'].volume24h * 0.1,
+          marketCap: filteredData['ETH'].marketCap * 0.001
         };
       }
       
-      // Add modX with mock data for now (since it's our custom token)
       filteredData['modX'] = {
         symbol: 'modX',
         price: 0.251,
@@ -63,7 +63,6 @@ export const useRealTimePrice = () => {
         marketCap: 2505000
       };
       
-      // Calculate market caps based on approximate circulating supplies
       const circulatingSupplies: { [key: string]: number } = {
         'BNB': 149856150,
         'BTC': 19700000,
@@ -84,10 +83,9 @@ export const useRealTimePrice = () => {
       
       setPriceData(filteredData);
     } catch (err) {
-      console.error('Error fetching price data:', err);
+      logger.error('Error fetching price data:', err);
       setError('Failed to fetch price data');
       
-      // Enhanced fallback data with all tokens
       setPriceData({
         'BNB': { symbol: 'BNB', price: 350, change24h: 2.34, volume24h: 890340, marketCap: 52450000 },
         'BTC': { symbol: 'BTC', price: 65000, change24h: 1.23, volume24h: 25000000, marketCap: 1200000000 },
@@ -106,8 +104,6 @@ export const useRealTimePrice = () => {
 
   useEffect(() => {
     fetchPriceData();
-    
-    // Update every 30 seconds
     const interval = setInterval(fetchPriceData, 30000);
     return () => clearInterval(interval);
   }, []);
